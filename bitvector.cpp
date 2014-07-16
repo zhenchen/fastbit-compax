@@ -7,6 +7,8 @@
 // smaller than a word (uint32_t).
 //
 //#include<iostream> //only used for test. should be deleted when in use.
+#include<iostream>
+
 
 #if defined(_WIN32) && defined(_MSC_VER)
 #pragma warning(disable:4786)	// some identifier longer than 256 characters
@@ -300,6 +302,7 @@ void ibis::bitvector::compress_compax() {
 	void decode() {
 	    fillBit = (*it > HEADER1);
 	    isFill = (*it > ALLONES);
+		if(isFill && fillBit) *it = *it | 0xE0000000;
 		isDirty =( (int)(bool)(*it & COMPAX_DIRTYMASK1)+(int)(bool)(*it & COMPAX_DIRTYMASK2)+(int)(bool)(*it & COMPAX_DIRTYMASK3)+(int)(bool)(*it & COMPAX_DIRTYMASK4) == 1 );
 		dirtyPos = ((int)(bool)(*it & COMPAX_DIRTYMASK4) << 3 )+ ((int)(bool)(*it & COMPAX_DIRTYMASK3) << 2) + ((int)(bool)(*it & COMPAX_DIRTYMASK2) << 1 ) + ((int)(bool)(*it & COMPAX_DIRTYMASK1));   // More efficient
 		nWords = (*it & MAXCNT);
@@ -761,15 +764,16 @@ void ibis::bitvector::decompress_compax()
 	
 	array_t<word_t> tmp_array(wahLength+1,0);
 
-	bitvector tmp_vec(tmp_array);
-	currentTmp.it = tmp_vec.m_vec.begin();
+	bitvector * tmp_vec = new bitvector(tmp_array);
+
+	currentTmp.it = tmp_vec->m_vec.begin();
 	current.it = m_vec.begin();
 	current.decode();
 
 	for (++current.it; current.it <m_vec.end(); ++ current.it)
 	{
 		current.decode();
-	//	std::cout<<"cpxType:"<<current.cpxType<<std::endl;
+		std::cout<<"cpxType:"<<current.cpxType<<std::endl;
 		if(current.isLiteral)
 		{
 			*currentTmp.it = *current.it;
@@ -835,7 +839,7 @@ void ibis::bitvector::decompress_compax()
 		}
 //		std::cout<<std::hex<<*(m_vec.begin())<<std::endl;	
 	}
-	m_vec.swap(tmp_vec.m_vec);//exanchge the two arrays.
+	m_vec.swap(tmp_vec->m_vec);//exanchge the two arrays.
 }
 
 
