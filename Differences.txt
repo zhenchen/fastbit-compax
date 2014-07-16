@@ -1,0 +1,22 @@
+The differences between the original version of the Fastbit and Yuhao Wen's version are as below:
+
+index.cpp
+        line 4224: add "tmp->decompress_compax()".
+
+bitvector.h
+        line 122-: add the declarations of the functions used in COMPAX, such as compress_compax() and decompress_compax().
+        line 197-: add the declarations of the constants used in COMPAX, such as MAXCNT_COMPAX() and HEADER0_COMPAX.
+        And I wonder why the declaration of the function write "void write(const char *fn) const" is changed into "void write(const char *fn)".
+
+bitvector.cpp
+        line 25: add the definitions of the constants used in COMPAX and newly declared in "bitvector.h", such as MAXCNT_COMPAX() and HEADER0_COMPAX.
+        line 262-: add the definitions of the functions used in COMPAX and newly declared in "bitvector.h", such as compress_compax() and decompress_compax().
+        line 265: delete the conditon, "m_vec.incore() == false" in IF.
+        line 2004: add "//compress_compax()". I wonder what it is intended for, because there is nothing new after the comment.
+        line 2072: in the function "void ibis::bitvector::write(int out)" add
+            "
+                ierr = UnixWrite(out,(const void*)&tmp_size,4);
+            	compress_compax();
+            ".
+
+Those are all the modification of the original version of Fastbit Yuhao Wen performs to embed the COMPAX in Fastbit I have found. So if we need to embed other algorithms of index compression, we only need to modify the places as above.
