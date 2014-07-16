@@ -119,14 +119,16 @@ public:
 
     // I/O functions.
     void read(const char *fn);
-    void write(const char *fn) const;
-    void write(int fdes) const;
+    void write(const char *fn) ;
+    void write(int fdes) ;
     void write(array_t<word_t>& arr) const;
 
+	void decompress_compax();
+
     void compress();
-	void compress_wah();
-    void decompress_wah();
-	void decompress();
+	void compress_compax();
+    void decompress();
+    void decompress2();
     word_t compressible() const;
     /// Does this bit vector use less space than the maximum? Return true
     /// if yes, otherwise false.
@@ -274,7 +276,7 @@ private:
     mutable word_t nset;	///!< Number of bits that are 1 in @c m_vec.
     active_word active;		///!< The active word.
     array_t<word_t> m_vec;	///!< Store whole words.
-
+	
     // private functions of bitvector class
     word_t count_c1(const bitvector& mask) const;
     word_t count_c2(const bitvector& mask) const;
@@ -316,7 +318,6 @@ private:
     inline void copy_runsn(array_t<word_t>::iterator& jt, run& it,
 			   word_t& nw);
     void decompress(array_t<word_t>& tmp) const;
-	void decompress_compax(array_t<word_t>& tmp) const;
     void copy_comp(array_t<word_t>& tmp) const;
     inline void append_active();
     inline void append_counter(int val, word_t cnt);

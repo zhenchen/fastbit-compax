@@ -6,6 +6,8 @@
 // The major goal of this implementation is to avoid accessing anything
 // smaller than a word (uint32_t).
 //
+//#include<iostream> //only used for test. should be deleted when in use.
+
 #if defined(_WIN32) && defined(_MSC_VER)
 #pragma warning(disable:4786)	// some identifier longer than 256 characters
 #endif
@@ -47,6 +49,8 @@ const ibis::bitvector::word_t ibis::bitvector::COMPAX_DIRTYMASK2 =
 (255U<<8);
 const ibis::bitvector::word_t ibis::bitvector::COMPAX_DIRTYMASK1 =
 (255u);
+
+
 
 /// Default constructor.  Creates a new empty bitvector.
 ibis::bitvector::bitvector() : nbits(0), nset(0), active(), m_vec() {
@@ -278,112 +282,17 @@ ibis::bitvector& ibis::bitvector::operator+=(const ibis::bitvector& bv) {
     return *this;
 } // ibis::bitvector::operator+=
 
-/// Compress the current m_vec in-place.  It may reduces storage
-/// requirement by merging fills into fill words.
-void ibis::bitvector::compress_wah() {
-    if (m_vec.size() < 2 || m_vec.incore() == false) // there is nothing to do
+//compress_compax function
+void ibis::bitvector::compress_compax() {
+    
+	if (m_vec.size() < 2 || m_vec.incore() == false) // there is nothing to do
 	return;
 
     struct xrun {
 	bool   isFill;
 	int    fillBit;
-	word_t nWords;
-	array_t<word_t>::iterator it;
-
-	xrun() : isFill(false), fillBit(0), nWords(0), it(0) {};
-	void decode() {
-	    fillBit = (*it > HEADER1);
-	    isFill = (*it > ALLONES);
-	    nWords = (*it & MAXCNT);
-	}
-    };
-    xrun last;	// point to the last code word in m_vec that might be modified
-                // NOTE: last.nWords is not used by this function
-    xrun current;// point to the current code to be examined
-
-    current.it = m_vec.begin();
-    last.it = m_vec.begin();
-    last.decode();
-    for (++ current.it; current.it < m_vec.end(); ++ current.it) {
-	current.decode();
-	if (last.isFill) { // last word was a fill word
-	    if (current.isFill) { // current word is a fill word
-		if (current.fillBit == last.fillBit) { // same type of fill
-		    *(last.it) += current.nWords;
-		}
-		else { // different types of fills, move last foward by one
-		    ++ last.it;
-		    *(last.it) = *(current.it);
-		    last.fillBit = current.fillBit;
-		}
-	    }
-	    else if ((last.fillBit == 0 && *(current.it) == 0) ||
-		     (last.fillBit != 0 && *(current.it) == ALLONES)){
-		// increase the last fill by 1 word
-		++ *(last.it);
-	    }
-	    else  { // move last forward by one
-		++ last.it;
-		last.isFill = false;
-		*(last.it) = *(current.it);
-	    }
-	}
-	else if (current.isFill) {
-	    // last word was a literal word, current word is a fill word
-	    if ((current.fillBit == 0 && *(last.it) == 0) ||
-		(current.fillBit != 0 && *(last.it) == ALLONES)) {
-		// change the last word into a fill word
-		*(last.it) = *(current.it) + 1;
-		last.fillBit = current.fillBit;
-		last.isFill = true;
-	    }
-	    else { // move last forward by one
-		++ last.it;
-		last.isFill = true;
-		*(last.it) = *(current.it);
-		last.fillBit = current.fillBit;
-	    }
-	}
-	else if (*(last.it) == *(current.it)) {
-	    // both last word and current word are literal words and are
-	    // the same
-	    if (*(current.it) == 0) { // make a 2-word 0-fill
-		*(last.it) = HEADER0 | 2;
-		last.isFill = true;
-		last.fillBit = 0;
-	    }
-	    else if (*(current.it) == ALLONES) { // make a 2-word 1-fill
-		*(last.it) = HEADER1 | 2;
-		last.isFill = true;
-		last.fillBit = 1;
-	    }
-	    else { // move last forward
-		++ last.it;
-		*(last.it) = *(current.it);
-	    }
-	}
-	else { // move last forward one word
-	    ++ last.it;
-	    *(last.it) = *(current.it);
-	}
-    }
-    ++ last.it;
-    if (last.it < m_vec.end()) { // reduce the size of m_vec
-	m_vec.erase(last.it, m_vec.end());
-    }
-} // ibis::bitvector::compress
-
-//NEWLY ADDED CODE:ibis::bitvertor::compress_compax
-void ibis::bitvector::compress() {
-	this->compress_wah();
-    if (m_vec.size() < 2 || m_vec.incore() == false) // there is nothing to do
-	return;
-
-    struct xrun {
-	bool   isFill;
-	int    fillBit;
-	int		isDirty;
-	int		dirtyPos;
+	bool	isDirty;
+	int dirtyPos;
 	word_t nWords;
 	array_t<word_t>::iterator it;
 
@@ -391,8 +300,8 @@ void ibis::bitvector::compress() {
 	void decode() {
 	    fillBit = (*it > HEADER1);
 	    isFill = (*it > ALLONES);
-		isDirty = ((*it & COMPAX_DIRTYMASK1 > 0)^(*it & COMPAX_DIRTYMASK2 > 0)^(*it & COMPAX_DIRTYMASK3 > 0)^(*it & COMPAX_DIRTYMASK4 > 0));
-		dirtyPos = (*it & COMPAX_DIRTYMASK4 > 0) << 3 + (*it & COMPAX_DIRTYMASK3 > 0) << 2 + (*it & COMPAX_DIRTYMASK2 > 0) << 1 + (*it & COMPAX_DIRTYMASK1 > 0); 
+		isDirty =( (int)(bool)(*it & COMPAX_DIRTYMASK1)+(int)(bool)(*it & COMPAX_DIRTYMASK2)+(int)(bool)(*it & COMPAX_DIRTYMASK3)+(int)(bool)(*it & COMPAX_DIRTYMASK4) == 1 );
+		dirtyPos = ((int)(bool)(*it & COMPAX_DIRTYMASK4) << 3 )+ ((int)(bool)(*it & COMPAX_DIRTYMASK3) << 2) + ((int)(bool)(*it & COMPAX_DIRTYMASK2) << 1 ) + ((int)(bool)(*it & COMPAX_DIRTYMASK1));   // More efficient
 		nWords = (*it & MAXCNT);
 	}
     };
@@ -403,13 +312,15 @@ void ibis::bitvector::compress() {
     xrun current;// point to the current code to be examined
 
 	bool existBeforeLast = false;
+	bool  existLast = true;
+	word_t wah_size = m_vec.end() - m_vec.begin(); // count the wah's size.
 
     current.it = m_vec.begin();
     last.it = m_vec.begin();
 	beforeLast.it = m_vec.begin();
 
-	//predeal, merge all fills.
-	for (++ current.it; current.it < m_vec.end(); ++ current.it) {
+	//predeal, merge all fills. supposed to be finished by compress(), so do not need to repeat it.
+/*	for (++ current.it; current.it < m_vec.end(); ++ current.it) {
 	current.decode();
 	last.decode();
 	beforeLast.decode();
@@ -469,58 +380,64 @@ void ibis::bitvector::compress() {
     if (last.it < m_vec.end()) { // reduce the size of m_vec
 	m_vec.erase(last.it, m_vec.end());
     }
-	
+*/	
 	//next step, find all LFL/FLF
-	current.it = m_vec.begin();
-    last.it = m_vec.begin();
-	beforeLast.it = m_vec.begin();
     for (++ current.it; current.it < m_vec.end(); ++ current.it) {
 	current.decode();
 	last.decode();
 	beforeLast.decode();
 
-	if(!existBeforeLast){
+	if(!existLast)
+	{
+		*(last.it) = *(current.it);
+		existBeforeLast = false; 
+		existLast = true;
+	}
+	else if(!existBeforeLast){
 	if (last.isFill) { // last word was a fill word
 	    if (current.isFill) { // current word is a fill word
 		if (current.fillBit == last.fillBit) { // same type of fill
 		    *(last.it) += current.nWords;
 		}
 		else { // different types of fills, move last foward by one
-		    *(beforeLast.it) = *(last.it);
-			++ last.it;
-		    *(last.it) = *(current.it);
+			*(beforeLast.it) = *(last.it);
+			last.it++;
+			*(last.it) = *(current.it);
 			existBeforeLast = true; //set flag to true.
 		//	 last.fillBit = current.fillBit;
 		}
 	    }
-	    else if ((last.fillBit == 0 && *(current.it) == 0) ||
+/*	    else if ((last.fillBit == 0 && *(current.it) == 0) ||
 		     (last.fillBit != 0 && *(current.it) == ALLONES)){
 		// increase the last fill by 1 word
 		++ *(last.it);
 	    }
+*/ //  used to be fail-safe code, but seems not necessary.
+
 	    else  { // move last forward by one
-		*(beforeLast.it) = *(last.it);
-		++ last.it;
-		*(last.it) = *(current.it);
+			*(beforeLast.it) = *(last.it);
+			last.it++;
+			*(last.it) = *(current.it);
 		existBeforeLast = true;
 	    }
 	}
 	else if (current.isFill) {
 	    // last word was a literal word, current word is a fill word
-	    if ((current.fillBit == 0 && *(last.it) == 0) ||
+/*	    if ((current.fillBit == 0 && *(last.it) == 0) ||
 		(current.fillBit != 0 && *(last.it) == ALLONES)) {
 		// change the last word into a fill word
 			*(last.it) = current.nWords + 1;
 			if(current.fillBit == 0) {*(last.it) += HEADER0;}//equals to change last's type to fill. Since will decode every loop, next two sentences should be deleted.
 			else {*(last.it) += HEADER1;}
 		}
-	    else { // move last forward by one
-		*(beforeLast.it) = *(last.it);
-		++ last.it;
-		*(last.it) = *(current.it);
+	    else { */   // used to be fail-safe code, but seems not necessary.
+		
+		// move last forward by one
+			*(beforeLast.it) = *(last.it);
+			last.it++;
+			*(last.it) = *(current.it);
 		existBeforeLast = true;
-	    }
-	}
+		}
 	else if (*(last.it) == *(current.it)) {
 	    // both last word and current word are literal words and are
 	    // the same
@@ -532,16 +449,16 @@ void ibis::bitvector::compress() {
 	    }
 	    else { // move last forward
 			*(beforeLast.it) = *(last.it);
-			++ last.it;
+			last.it++;
 			*(last.it) = *(current.it);
 			existBeforeLast = true;
 	    }
 	}
 	else { // move last forward one word
-		*(beforeLast.it) = *(last.it);
-		++ last.it;
-		 *(last.it) = *(current.it);
-		existBeforeLast = true;
+			*(beforeLast.it) = *(last.it);
+			last.it++;
+			*(last.it) = *(current.it);
+			existBeforeLast = true;
 	}
     }
 	else{
@@ -559,55 +476,70 @@ void ibis::bitvector::compress() {
 					}
 				}
 				else{
-					if((last.fillBit == 0 || *(current.it)==0)&&(last.fillBit!=0 || *(current.it)== ALLONES)){ // FFL, L=2nd F
+	/*				if((last.fillBit == 0 || *(current.it)==0)&&(last.fillBit!=0 || *(current.it)== ALLONES)){ // FFL, L=2nd F
 						*(last.it)++;
 					}
-					else{ //FFL,L cannot combine with F
-						beforeLast.it++;
-						*(beforeLast.it) = *(last.it);
-						last.it++;
-						*(last.it) = *(current.it);
+					else{ */
+					//FFL,L cannot combine with F
+					beforeLast.it++;
+					*(beforeLast.it) = *(last.it);
+					last.it++;
+					*(last.it) = *(current.it);
 					}
 				}
-			}
+			
 			else{ //FL
 				if(current.isFill){ //FLF
-					if((current.fillBit == 0 || *(last.it)==0)&&(current.fillBit!=0 || *(last.it)== ALLONES)){		//L & F are the same
+				/*	if((current.fillBit == 0 || *(last.it)==0)&&(current.fillBit!=0 || *(last.it)== ALLONES)){		//L & F are the same
 						*(last.it) = current.nWords + 1;
 						if(current.fillBit==0){*(last.it) += HEADER0;}
 						else{*(last.it)+= HEADER1;}
 					}
-					else{
+					else{*/
 						if(!last.isDirty){ //L not dirty
-							beforeLast.it++;
-							*(beforeLast.it) = *(last.it);
-							last.it++;
-							*(last.it) = *(current.it);
+						beforeLast.it++;
+						*(beforeLast.it) = *(last.it);
+						last.it++;
+						*(last.it) = *(current.it);
 						}
 						else { //L dirty
-							if(beforeLast.fillBit != last.fillBit){ // not the same fill. should be modified in SECOMPAX and ICX
+							if(beforeLast.fillBit != current.fillBit){ // not the same fill. should be modified in SECOMPAX and ICX
 								beforeLast.it++;
 								*(beforeLast.it) = *(last.it);
 								last.it++;
 								*(last.it) = *(current.it);
 							}
-							else{ //FLF encode
-								*(beforeLast.it) = *(beforeLast.it) << 8;
-								switch (*(last.it)){
-								case 8: *(beforeLast.it) += *(last.it) >>16; *(beforeLast.it) += 3U << 25;  break;
-								case 4: *(beforeLast.it) += *(last.it) >>8; *(beforeLast.it) += 2U << 25; break;
-								case 2: *(beforeLast.it) += *(last.it) ; *(beforeLast.it) += 1U << 25; break;
-								case 1: *(beforeLast.it) += *(last.it) <<8; break;
+							else{ 
+								if(((*(beforeLast.it)&0x3fffffff)>0x000000ff)||(((*(current.it))&0x3fffffff)>0x000000ff))
+								{
+									beforeLast.it++;
+									*(beforeLast.it) = *(last.it);
+									last.it++;
+									*(last.it) = *(current.it);
 								}
-								if (current.fillBit) {*(beforeLast.it) += 3U << 27;}
+								else{
+								//FLF encode
+								*(beforeLast.it) = beforeLast.nWords << 16;
+								switch (last.dirtyPos){
+								case 8: *(beforeLast.it) += (*(last.it) >>16); *(beforeLast.it) += (3U << 25);  break;
+								case 4: *(beforeLast.it) += (*(last.it) >>8); *(beforeLast.it) += (2U << 25); break;
+								case 2: *(beforeLast.it) += *(last.it) ; *(beforeLast.it) += (1U << 25); break;
+								case 1: *(beforeLast.it) += (*(last.it) <<8); break;
+								}
+								if (current.fillBit) {*(beforeLast.it) += (3U << 27);}
 								else ;
 								*(beforeLast.it) += HEADER_FLF_COMPAX;
+								*(beforeLast.it) += current.nWords;
 								last.it = beforeLast.it;
+								last.it++;
+								beforeLast.it++;
 								existBeforeLast = false;
+								existLast = false;
+								}
 							}
 						}
 					}
-				}
+			
 				else{ //FLL
 					if(*(last.it)==*(current.it)){
 						if(*(current.it)==0){
@@ -624,14 +556,14 @@ void ibis::bitvector::compress() {
 						}
 					}
 					else{ 
-						beforeLast.it++;
-						*(beforeLast.it) = *(last.it);
-						last.it++;
-						*(last.it) = *(current.it);
+					beforeLast.it++;
+					*(beforeLast.it) = *(last.it);
+					last.it++;
+					*(last.it) = *(current.it);
 						}
 					}
-				}	
-			}
+			}	
+		}
 		else{ //L
 			if(!last.isFill){//LL
 				if(!current.isFill){//LLL
@@ -651,44 +583,45 @@ void ibis::bitvector::compress() {
 					}
 					else{ //random L
 						beforeLast.it++;
-						*(beforeLast.it) = *(last.it);
-						last.it++;
-						*(last.it) = *(current.it);
+					*(beforeLast.it) = *(last.it);
+					last.it++;
+					*(last.it) = *(current.it);
 					}
 				}
 				else{//LLF
-					if((current.fillBit == 0 || *(last.it)==0)&&(current.fillBit!=0 || *(last.it)== ALLONES)){		//L & F are the same
+				/*	if((current.fillBit == 0 || *(last.it)==0)&&(current.fillBit!=0 || *(last.it)== ALLONES)){		//L & F are the same
 						*(last.it) = current.nWords + 1;
 						if(current.fillBit==0){*(last.it) += HEADER0;}
 						else{*(last.it)+= HEADER1;}
 					}
-					else{// LF cannot combine
+					else{*/
+						// LF cannot combine
 						beforeLast.it++;
 						*(beforeLast.it) = *(last.it);
 						last.it++;
 						*(last.it) = *(current.it);
-					}
+					
 				}
 			}
 			else{//LF
 				if(!beforeLast.isDirty){//not dirty
 					if(!current.isFill){//LFL (1st L not dirty)
-						if((last.fillBit == 0 || *(current.it)==0)&&(last.fillBit != 0 || *(current.it)== ALLONES)){ // FFL, L=2nd F
+					/*	if((last.fillBit == 0 || *(current.it)==0)&&(last.fillBit != 0 || *(current.it)== ALLONES)){ // FFL, L=2nd F
 							*(last.it)++;
 						}
-						else{ //LFL,L cannot combine with F
-							beforeLast.it++;
-							*(beforeLast.it) = *(last.it);
-							last.it++;
-							*(last.it) = *(current.it);
-						}
+						else{ */
+							//LFL,L cannot combine with F
+						beforeLast.it++;
+						*(beforeLast.it) = *(last.it);
+						last.it++;
+						*(last.it) = *(current.it);						
 					}
 					else{//LFF (no dirty)
 						if(current.fillBit == last.fillBit){ // same kind of fill
 							*(last.it) += current.nWords;
 						}
 						else{//differnet type of fill
-							beforeLast.it++;
+								beforeLast.it++;
 							*(beforeLast.it) = *(last.it);
 							last.it++;
 							*(last.it) = *(current.it);
@@ -701,42 +634,52 @@ void ibis::bitvector::compress() {
 							*(last.it) += current.nWords;
 						}
 						else{//differnet type of fill
-							beforeLast.it++;
-							*(beforeLast.it) = *(last.it);
-							last.it++;
-							*(last.it) = *(current.it);
+						beforeLast.it++;
+						*(beforeLast.it) = *(last.it);
+						last.it++;
+						*(last.it) = *(current.it);
 						}	
 					}
 					else{//LFL fisrt F dirty
 						if(current.isDirty){//LFL encoding!
-							switch(*(beforeLast.it)){
-							case 8: *(beforeLast.it) = *(beforeLast.it) >> 8; *(beforeLast.it) += 3U << 27; break;
-							case 4: *(beforeLast.it) = *(beforeLast.it); *(beforeLast.it) += 2U << 27; break;
-							case 2: *(beforeLast.it) = *(beforeLast.it) << 8; *(beforeLast.it) += 1U << 27; break;
-							case 1: *(beforeLast.it) = *(beforeLast.it) << 16; break;
-							} 
-							switch(*(current.it)){
-							case 8: *(beforeLast.it) += *(current.it) >> 24 ; *(beforeLast.it) += 3U << 25; break;
-							case 4: *(beforeLast.it) += *(current.it) >>16; *(beforeLast.it) += 2U << 25; break;
-							case 2: *(beforeLast.it) += *(current.it) >> 8; *(beforeLast.it) += 1U << 25; break;
-							case 1: *(beforeLast.it) += *(current.it); break;
-							}
-							*(beforeLast.it) += *(last.it) << 8;
-							*(beforeLast.it) += HEADER_LFL_COMPAX;						
-							last.it = beforeLast.it;
-							existBeforeLast = false;
-						}
-						else
-						{
-							if((last.fillBit == 0 || *(current.it)==0)&&(last.fillBit != 0 || *(current.it)== ALLONES)){ // LFL, L=2nd F
-							*(last.it)++;
-							}
-							else{ //LFL,L cannot combine with F
+							if(((*last.it)&0x3fffffff)>0x000000ff)
+							{//counter not enough.
 								beforeLast.it++;
 								*(beforeLast.it) = *(last.it);
 								last.it++;
 								*(last.it) = *(current.it);
 							}
+							else{
+							switch(beforeLast.dirtyPos){
+							case 8: *(beforeLast.it) = (*(beforeLast.it) >> 8); *(beforeLast.it) += (3U << 26); break;
+							case 4: *(beforeLast.it) = *(beforeLast.it); *(beforeLast.it) += (2U << 26); break;
+							case 2: *(beforeLast.it) = (*(beforeLast.it) << 8); *(beforeLast.it) += (1U << 26); break;
+							case 1: *(beforeLast.it) = (*(beforeLast.it) << 16); break;
+							} 
+							switch(current.dirtyPos){
+							case 8: *(beforeLast.it) += (*(current.it) >> 24) ; *(beforeLast.it) += (3U << 24); break;
+							case 4: *(beforeLast.it) += (*(current.it) >>16); *(beforeLast.it) += (2U << 24); break;
+							case 2: *(beforeLast.it) += (*(current.it) >> 8); *(beforeLast.it) += (1U << 24); break;
+							case 1: *(beforeLast.it) += *(current.it); break;
+							}
+							*(beforeLast.it) += (last.nWords << 8);
+							*(beforeLast.it) += (last.fillBit << 28);
+							*(beforeLast.it) += HEADER_LFL_COMPAX;						
+							last.it = beforeLast.it;
+							last.it++;
+							beforeLast.it++;
+							existBeforeLast = false;
+							existLast = false;
+							}
+						}
+						else
+						{
+							 //LFL,L cannot combine with F
+							beforeLast.it++;
+							*(beforeLast.it) = *(last.it);
+							last.it++;
+							*(last.it) = *(current.it);
+							
 						}
 					}
 				}
@@ -745,17 +688,279 @@ void ibis::bitvector::compress() {
 	}
 	}
 	
-    ++ last.it;
-    if (last.it < m_vec.end()) { // reduce the size of m_vec
+	last.it++;
+
+	if (last.it < m_vec.end()) { // reduce the size of m_vec
 	m_vec.erase(last.it, m_vec.end());
     }
+	//appendWord(wah_size);
+
 } // ibis::bitvector::compress
 
+// Convert stored compax bitvectors into wah for further treatment. (Wen,July 9 2014)
+
+void ibis::bitvector::decompress_compax()
+{
+	struct xrun {
+		bool isLiteral;
+		int cpxType;
+		int fillType; //only useful for FLF/LFL
+		int dirtyBytePos1, dirtyBytePos2;	// only useful for FLF/LFL
+		word_t dirtyByte1, dirtyByte2;  // only useful for FLF/LFL
+		word_t counter1, counter2;
+		array_t<word_t>::iterator it;
+
+		xrun() : isLiteral(false), cpxType(0), dirtyByte1(0), dirtyByte2(0), dirtyBytePos1(0), dirtyBytePos2(0), counter1(0), counter2(0),it(0) {};
+		void decode() {
+			isLiteral = !(*it >> MAXBITS);
+			cpxType = (*it >> MAXBITS - 2) & 3;
+
+			if(!isLiteral)
+			{
+				if(cpxType == 0) // 0-fill
+				{
+					fillType = 0;
+					counter1 = (*it & 0x3fffffff);
+				}
+				else if(cpxType == 1)  //LFL
+				{
+					fillType = (bool)(*it & 0x10000000);
+					dirtyBytePos1 = (*it & 0x0cffffff) >> (MAXBITS - 5);
+					dirtyBytePos2 = (*it & 0x03ffffff) >> (MAXBITS - 7);
+					dirtyByte1 = (*it & 0x00ff0000) >> (MAXBITS -  15);
+					dirtyByte2 = (*it & 0x000000ff);
+					counter1 = (*it & 0x0000ff00) >> (MAXBITS - 23);
+				}
+				else if(cpxType == 2)  //FLF
+				{
+					fillType = bool(*it & 0x10000000);
+					dirtyBytePos1 = (*it & 0x06ffffff) >> (MAXBITS - 6);
+					dirtyByte1 = (*it & 0x0000ff00) >> (MAXBITS - 23);
+					counter1 = (*it & 0x00ff0000) >> (MAXBITS -  15);
+					counter2 = (*it & 0x000000ff);
+				}
+				else if(cpxType == 3) // 1-fill
+				{
+					fillType = 1;
+					counter1 = (*it & 0x3fffffff);
+				}
+			}
+			else;
+		}
+		};
+
+	xrun current;// point to the current code to be examined
+	xrun currentTmp;
+	//initialize new bitvector. At last m_vec would be replaced by tmp_vec.
+	
+	word_t wahLength = *(m_vec.begin());  // read length of wah.
+//	int cpxLength = m_vec.size();
+	
+//	std::cout<<"cpxLength"<<cpxLength<<std::endl;
+//	std::cout<<"m_vec.size"<<m_vec.size()<<std::endl;
+	
+	array_t<word_t> tmp_array(wahLength+1,0);
+
+	bitvector tmp_vec(tmp_array);
+	currentTmp.it = tmp_vec.m_vec.begin();
+	current.it = m_vec.begin();
+	current.decode();
+
+	for (++current.it; current.it <m_vec.end(); ++ current.it)
+	{
+		current.decode();
+	//	std::cout<<"cpxType:"<<current.cpxType<<std::endl;
+		if(current.isLiteral)
+		{
+			*currentTmp.it = *current.it;
+			currentTmp.it++;
+		}
+		else
+		{
+			if(current.cpxType == 0) //0-FILL
+			{
+				*currentTmp.it = current.counter1;
+				*currentTmp.it += 0x80000000;
+				currentTmp.it++;
+			}
+			else if(current.cpxType == 1) //LFL
+			{
+				switch (current.dirtyBytePos1)
+				{
+				case 0: *currentTmp.it = current.dirtyByte1;break;
+				case 1: *currentTmp.it = (current.dirtyByte1 << 8);break;
+				case 2:*currentTmp.it = (current.dirtyByte1 << 16);break;
+				case 3:*currentTmp.it = (current.dirtyByte1 << 24);break;
+				}
+				currentTmp.it ++;
+				*currentTmp.it = current.counter1;
+				if(current.fillType == 1) *currentTmp.it += 0x40000000;
+				*currentTmp.it += 0x80000000;
+				currentTmp.it ++;
+				switch(current.dirtyBytePos2)
+				{
+				case 0: *currentTmp.it = current.dirtyByte2;break;
+				case 1: *currentTmp.it = (current.dirtyByte2 << 8);break;
+				case 2:*currentTmp.it = (current.dirtyByte2 << 16);break;
+				case 3:*currentTmp.it = (current.dirtyByte2 << 24);break;
+				}
+				currentTmp.it++;
+			}
+			else if(current.cpxType == 2) //FLF
+			{
+				*currentTmp.it = current.counter1;
+				if(current.fillType == 1) *currentTmp.it += 0x40000000;
+				*currentTmp.it += 0x80000000;
+				currentTmp.it ++;
+				switch (current.dirtyBytePos1)
+				{
+				case 0: *currentTmp.it = current.dirtyByte1;break;
+				case 1: *currentTmp.it = (current.dirtyByte1 << 8);break;
+				case 2:*currentTmp.it = (current.dirtyByte1 << 16);break;
+				case 3:*currentTmp.it = (current.dirtyByte1 << 24);break;
+				}
+				currentTmp.it++;
+				*currentTmp.it = current.counter2;
+				if(current.fillType == 1) *currentTmp.it += 0x40000000;
+				*currentTmp.it += 0x80000000;
+				currentTmp.it ++;
+		//		std::cout<<std::hex<<*(m_vec.begin())<<std::endl;	
+			}
+			else if(current.cpxType == 3) //1-FILL
+			{
+				*currentTmp.it = current.counter1;
+				*currentTmp.it += 0xc0000000;
+				currentTmp.it++;
+			}
+		}
+//		std::cout<<std::hex<<*(m_vec.begin())<<std::endl;	
+	}
+	m_vec.swap(tmp_vec.m_vec);//exanchge the two arrays.
+}
+
+
+
+/// Compress the current m_vec in-place.  It may reduces storage
+/// requirement by merging fills into fill words.
+void ibis::bitvector::compress() 
+{
+	//if (m_vec.size() < 2 || m_vec.incore() == false) // there is nothing to do
+	if (m_vec.size() < 2 ) // there is nothing to do
+		return;
+
+	struct xrun {
+		bool   isFill;
+		int    fillBit;
+		word_t nWords;
+		array_t<word_t>::iterator it;
+
+		xrun() : isFill(false), fillBit(0), nWords(0), it(0) {};
+		void decode() {
+			fillBit = (*it > HEADER1);
+			isFill = (*it > ALLONES);
+			nWords = (*it & MAXCNT);
+		}
+	};
+	xrun last;	// point to the last code word in m_vec that might be modified
+	// NOTE: last.nWords is not used by this function
+	xrun current;// point to the current code to be examined
+
+	current.it = m_vec.begin();
+	last.it = m_vec.begin();
+	last.decode();
+	for (++ current.it; current.it < m_vec.end(); ++ current.it) {
+		current.decode();
+		if (last.isFill) 
+		{ 
+			// last word was a fill word
+			if (current.isFill) 
+			{ 
+				// current word is a fill word
+				if (current.fillBit == last.fillBit) 
+				{ 
+					// same type of fill
+					*(last.it) += current.nWords;
+				}
+				else 
+				{ 
+					// different types of fills, move last foward by one
+					++ last.it;
+					*(last.it) = *(current.it);
+					last.fillBit = current.fillBit;
+				}
+			}
+			else if ((last.fillBit == 0 && *(current.it) == 0) ||
+				(last.fillBit != 0 && *(current.it) == ALLONES))
+			{
+				// increase the last fill by 1 word
+				++ *(last.it);
+			}
+			else  
+			{ 
+				// move last forward by one
+				++ last.it;
+				last.isFill = false;
+				*(last.it) = *(current.it);
+			}
+		}
+		else if (current.isFill) 
+		{
+			// last word was a literal word, current word is a fill word
+			if ((current.fillBit == 0 && *(last.it) == 0) ||
+				(current.fillBit != 0 && *(last.it) == ALLONES)) 
+			{
+				// change the last word into a fill word
+				*(last.it) = *(current.it) + 1;
+				last.fillBit = current.fillBit;
+				last.isFill = true;
+			}
+			else 
+			{ // move last forward by one
+				++ last.it;
+				last.isFill = true;
+				*(last.it) = *(current.it);
+				last.fillBit = current.fillBit;
+			}
+		}
+		else if (*(last.it) == *(current.it)) 
+		{
+			// both last word and current word are literal words and are
+			// the same
+			if (*(current.it) == 0) 
+			{ // make a 2-word 0-fill
+				*(last.it) = HEADER0 | 2;
+				last.isFill = true;
+				last.fillBit = 0;
+			}
+			else if (*(current.it) == ALLONES) 
+			{ // make a 2-word 1-fill
+				*(last.it) = HEADER1 | 2;
+				last.isFill = true;
+				last.fillBit = 1;
+			}
+			else 
+			{ // move last forward
+				++ last.it;
+				*(last.it) = *(current.it);
+			}
+		}
+		else 
+		{ // move last forward one word
+			++ last.it;
+			*(last.it) = *(current.it);
+		}
+	}
+	++ last.it;
+	if (last.it < m_vec.end()) 
+	{ // reduce the size of m_vec
+		m_vec.erase(last.it, m_vec.end());
+	}
+} // ibis::bitvector::compress
 
 /// Decompress the currently compressed bitvector.  It turns all fill words
 /// into literal words.  Throws an ibis::bad_alloc exception if it fails to
 /// allocate enough memory.
-void ibis::bitvector::decompress_wah() {
+void ibis::bitvector::decompress() {
     if (nbits == 0 && m_vec.size() > 0)
 	nbits = do_cnt();
     if (m_vec.size()*MAXBITS == nbits) // already uncompressed
@@ -796,100 +1001,6 @@ void ibis::bitvector::decompress_wah() {
 	m_vec.swap(tmp);  // take on the new vector
 } // ibis::bitvector::decompress
 
-void ibis::bitvector::decompress(){
-
-// ATTENTION: since the function of counting ones haven't been re-written yet, the necessary judgement before decompress is still vacant though it may not affect the final result.
-	
-    array_t<word_t> tmp;
-	tmp.resize(m_vec.size()*3); // pre-allocate the positions, then erase.
-
-    array_t<word_t>::iterator it = tmp.begin();
-    array_t<word_t>::const_iterator i0 = m_vec.begin();
-
-	//ATTENTION: the variables are all word_t.
-
-    for (; i0!=m_vec.end(); i0++) {
-		if(*i0>ALLONES){// literal,leave it as it is
-				*it = *i0;
-				it++;
-		}
-		else{
-			word_t tmpHeader = (*i0 >> (MAXBITS - 2));
-			if(tmpHeader == HEADER0_COMPAX){
-				word_t tmpCnt = (*i0 & MAXCNT_COMPAX);
-				*it =  (tmpCnt | HEADER0);
-				it++;
-			}
-			else if (tmpHeader == HEADER1_COMPAX){
-				word_t tmpCnt = (*i0 & MAXCNT_COMPAX);
-				*it = (tmpCnt | HEADER1);
-				it++;
-			}
-			else if(tmpHeader == HEADER_LFL_COMPAX){
-				word_t tmpCnt = ((*i0 >> 8) & 0xff);
-				word_t dirtyByte1 = ((*i0 >> 16) & 0xff);
-				word_t dirtyByte2 = (*i0 & 0xff);
-				word_t dirtyPos1 = ((*i0 >> 27) & 0x3);
-				word_t dirtyPos2 = ((*i0 >> 25) & 0x3);
-				switch (dirtyPos1){
-				case 0: *it = (dirtyByte1 << 24); break;
-				case 1: *it = (dirtyByte1 << 16); break;
-				case 2: *it = (dirtyByte1 << 8); break;
-				case 3: *it = dirtyByte1; break;
-				}; // This part of code may simplfied as follows: *it = dirtyByte1 << (24-8*dirtyPos1), however not tested,,
-					//and the efficiency or speed may lower than current code. Can be modified and tested if possible. 
-					// codes below can be modified the same way.
-				it++;
-				*it = HEADER0 | tmpCnt;
-				it++;
-				switch (dirtyPos2){
-				case 0: *it = (dirtyByte2 << 24); break;
-				case 1: *it = (dirtyByte2 << 16);break;
-				case 2: *it = (dirtyByte2 << 8); break;
-				case 3: *it = (dirtyByte2); break;
-				}
-				it++;
-			}
-			else{ // FLF
-				word_t tmpCnt1= (*i0 >> 16) & 0xff;
-				word_t tmpCnt2 = *i0 & 0xff;
-				word_t dirtyByte = (*i0 >> 8) & 0xff; 
-				word_t fillType = (*i0 >> 27) & 0x3;
-				word_t dirtyPos = (*i0 >> 25) & 0x3;
-				if(fillType == 0){
-					*it = tmpCnt1 | HEADER0;
-				}
-				else{
-					*it = tmpCnt1 | HEADER1;
-				}
-				it++;
-				switch (dirtyPos)
-				{
-				case 0: *it = (dirtyByte << 24); break;
-				case 1: *it = (dirtyByte << 16); break;
-				case 2: *it = (dirtyByte << 8); break;
-				case 3: *it = dirtyByte; break;
-				}
-				it++;
-				if(fillType == 0){
-					*it = tmpCnt2 | HEADER0;
-				}
-				else{
-					*it = tmpCnt2 | HEADER1;
-				}
-				it++;
-			}
-		}
-    }
-
-	if(it < tmp.end()){
-		tmp.erase(it,tmp.end());
-	}
-    if (m_vec.size() != tmp.size())
-	m_vec.swap(tmp);  // take on the new vector
-
-}
-
 /// Decompress the current content to an array_t<word_t>.
 void ibis::bitvector::decompress(array_t<ibis::bitvector::word_t>& tmp)
     const {
@@ -917,124 +1028,6 @@ void ibis::bitvector::decompress(array_t<ibis::bitvector::word_t>& tmp)
 	}
     }
 } // ibis::bitvector::decompress
-
-void ibis::bitvector::decompress_compax(array_t<ibis::bitvector::word_t>& tmp) const
-{
-	    array_t<word_t> tmpCompax;
-	tmpCompax.resize(m_vec.size()*3); // pre-allocate the positions, then erase.
-
-    array_t<word_t>::iterator it = tmpCompax.begin();
-    array_t<word_t>::const_iterator i0 = m_vec.begin();
-
-	//ATTENTION: the variables are all word_t.
-
-    for (; i0!=m_vec.end(); i0++) {
-		if(*i0>ALLONES){// literal,leave it as it is
-				*it = *i0;
-				it++;
-		}
-		else{
-			word_t tmpHeader = (*i0 >> (MAXBITS - 2));
-			if(tmpHeader == HEADER0_COMPAX){
-				word_t tmpCnt = (*i0 & MAXCNT_COMPAX);
-				*it =  (tmpCnt | HEADER0);
-				it++;
-			}
-			else if (tmpHeader == HEADER1_COMPAX){
-				word_t tmpCnt = (*i0 & MAXCNT_COMPAX);
-				*it = (tmpCnt | HEADER1);
-				it++;
-			}
-			else if(tmpHeader == HEADER_LFL_COMPAX){
-				word_t tmpCnt = ((*i0 >> 8) & 0xff);
-				word_t dirtyByte1 = ((*i0 >> 16) & 0xff);
-				word_t dirtyByte2 = (*i0 & 0xff);
-				word_t dirtyPos1 = ((*i0 >> 27) & 0x3);
-				word_t dirtyPos2 = ((*i0 >> 25) & 0x3);
-				switch (dirtyPos1){
-				case 0: *it = (dirtyByte1 << 24); break;
-				case 1: *it = (dirtyByte1 << 16); break;
-				case 2: *it = (dirtyByte1 << 8); break;
-				case 3: *it = dirtyByte1; break;
-				}; // This part of code may simplfied as follows: *it = dirtyByte1 << (24-8*dirtyPos1), however not tested,,
-					//and the efficiency or speed may lower than current code. Can be modified and tested if possible. 
-					// codes below can be modified the same way.
-				it++;
-				*it = HEADER0 | tmpCnt;
-				it++;
-				switch (dirtyPos2){
-				case 0: *it = (dirtyByte2 << 24); break;
-				case 1: *it = (dirtyByte2 << 16);break;
-				case 2: *it = (dirtyByte2 << 8); break;
-				case 3: *it = (dirtyByte2); break;
-				}
-				it++;
-			}
-			else{ // FLF
-				word_t tmpCnt1= (*i0 >> 16) & 0xff;
-				word_t tmpCnt2 = *i0 & 0xff;
-				word_t dirtyByte = (*i0 >> 8) & 0xff; 
-				word_t fillType = (*i0 >> 27) & 0x3;
-				word_t dirtyPos = (*i0 >> 25) & 0x3;
-				if(fillType == 0){
-					*it = tmpCnt1 | HEADER0;
-				}
-				else{
-					*it = tmpCnt1 | HEADER1;
-				}
-				it++;
-				switch (dirtyPos)
-				{
-				case 0: *it = (dirtyByte << 24); break;
-				case 1: *it = (dirtyByte << 16); break;
-				case 2: *it = (dirtyByte << 8); break;
-				case 3: *it = dirtyByte; break;
-				}
-				it++;
-				if(fillType == 0){
-					*it = tmpCnt2 | HEADER0;
-				}
-				else{
-					*it = tmpCnt2 | HEADER1;
-				}
-				it++;
-			}
-		}
-    }
-
-	if(it < tmpCompax.end()){
-		tmp.erase(it,tmpCompax.end());
-	}
-	
-	//Next part is the origin code of decompress of WAH.
-	  const word_t nb = ((nbits == 0 && tmpCompax.size() > 0) ? do_cnt() : nbits);
-    word_t cnt = nb/MAXBITS;
-    tmp.resize(cnt);
-
-    //array_t<word_t>::iterator it = tmp.begin();
-    it = tmp.begin();
-	//array_t<word_t>::const_iterator i0 = tmpCompax.begin();
-    i0 = tmpCompax.begin();
-	for (; i0!=tmpCompax.end(); i0++) {
-	if ((*i0) > ALLONES) {
-	    cnt = (*i0 & MAXCNT);
-	    if ((*i0)>=HEADER1) {
-		for (word_t j=0; j<cnt; j++, it++)
-		    *it = ALLONES;
-	    }
-	    else {
-		for (word_t j=0; j<cnt; j++, it++)
-		    *it = 0;
-	    }
-	}
-	else {
-	    *it = *i0;
-	    it++;
-	}
-	}
-}
-
-
 
 /// Decompress the current content to an array_t<word_t> and complement
 /// every bit.
@@ -2587,7 +2580,7 @@ void ibis::bitvector::read(const char * fn) {
 
 /// Write the bit vector to a file.
 /// The existing content of the file will be overwritten.
-void ibis::bitvector::write(const char * fn) const {
+void ibis::bitvector::write(const char * fn)  {
     if (fn == 0 || *fn == 0) return;
 
     FILE *out = fopen(fn, "wb");
@@ -2611,6 +2604,7 @@ void ibis::bitvector::write(const char * fn) const {
 	     << "Reset nbits to " << nb;
     }
 #endif
+//	compress_compax(); 
     ierr = fwrite((const void*)m_vec.begin(), sizeof(word_t), m_vec.size(),
 		  out);
     if (ierr != (long)(m_vec.size())) {
@@ -2664,7 +2658,7 @@ void ibis::bitvector::write(const char * fn) const {
 /// current file pointer position and overwrites existing content if there
 /// is any.  The caller is responsible for openning the file and closing
 /// the file.
-void ibis::bitvector::write(int out) const {
+void ibis::bitvector::write(int out) {
     if (out < 0)
 	return;
 
@@ -2677,7 +2671,10 @@ void ibis::bitvector::write(int out) const {
 	     << ").  Reset nbits to " << nb;
     }
 #endif
-    long ierr;
+	long ierr;
+	word_t tmp_size = m_vec.size();
+	ierr = UnixWrite(out,(const void*)&tmp_size,4);
+	compress_compax();
     const word_t n = sizeof(word_t) * m_vec.size();
     ierr = UnixWrite(out, (const void*)m_vec.begin(), n);
     if (ierr != (long) n) {
