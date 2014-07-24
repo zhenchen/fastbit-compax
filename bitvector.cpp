@@ -691,7 +691,7 @@ void ibis::bitvector::compress_compax() {
 	}
 	}
 	
-	last.it++;
+	if(existLast) last.it++;
 
 	if (last.it < m_vec.end()) { // reduce the size of m_vec
 	m_vec.erase(last.it, m_vec.end());
@@ -2677,7 +2677,7 @@ void ibis::bitvector::write(int out) {
 #endif
 	long ierr;
 	word_t tmp_size = m_vec.size();
-	ierr = UnixWrite(out,(const void*)&tmp_size,4);
+	ierr = UnixWrite(out,(const void*)&tmp_size,sizeof(word_t));
 	compress_compax();
     const word_t n = sizeof(word_t) * m_vec.size();
     ierr = UnixWrite(out, (const void*)m_vec.begin(), n);
@@ -2764,6 +2764,8 @@ void ibis::bitvector::write(int out) {
 	}
     }
 #endif
+	word_t vacant = 0x00000000;
+	appendWord(vacant); // simply add m_vec.size() by one. 
 } // ibis::bitvector::write
 
 /// Write the bit vector to an array_t<word_t>.  The serialized version
